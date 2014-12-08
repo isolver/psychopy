@@ -127,8 +127,7 @@ class ioObject(object):
         dlist = dir(self)
         for d in dlist:
             if d[0] is not '_' and d not in ['asNumpyArray',]:
-                if callable(getattr(self,d)):
-                    rpcList.append(d)
+                rpcList.append(d)
         return rpcList
 
 class Computer(object):
