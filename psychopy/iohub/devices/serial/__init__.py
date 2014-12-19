@@ -466,7 +466,7 @@ class PSTBox(Serial):
     Provides convenient access to the PST Serial Response Box.
 
     """
-    EVENT_CLASS_NAMES = ['SerialInputEvent', 'PSTBoxByteChangeEvent']
+    EVENT_CLASS_NAMES = ['SerialInputEvent', 'PstBoxButtonEvent']
     DEVICE_TYPE_ID = DeviceConstants.PSTBOX
     DEVICE_TYPE_STRING = "PSTBOX"
     # Only add new attributes for the subclass, the device metaclass pulls them together. 
@@ -654,25 +654,16 @@ class PstBoxButtonEvent(SerialByteChangeEvent):
 
     __slots__ = [e[0] for e in _newDataTypes]
     
-    # As is, this event will not work. This is because new fields have been added
-    # for the event. iohub not only supports streaming of events to psychopy at runtime, but
-    # it also stores events in the 'datastore', which is an hdf5 structured file.
-    # Each event type that has a specific set of fields different from other events must 
-    # have a table created to hold the event types data. Each table as columns that are created from
-    # the event classes datatypes dtype definition string.
-    
-    # Need to first know if this event type really should have  / needs the prev_byte and current_byte
-    # fields created in the SerialByteChangeEvent. If it does, then
-    # extending SerialByteChangeEvent as is done now makes sense . 
-    # If it does not need these fields, then it would be better
-    # to extend the base DeviceEvent class. 
+    # This should now work assuming prev_byte and current_byte fields are
+    # really wanted for this event type.
     
     # Regardless, the following changes need to be added to this file, 
     EVENT_TYPE_ID = EventConstants.PSTBOX_BUTTON
     EVENT_TYPE_STRING = 'PSTBOX_BUTTON'
     IOHUB_DATA_TABLE = EVENT_TYPE_STRING    
     
-    # TODO: and an update to constants.py and maybe datastore.__init__.py will be needed
+    # DONE: Update constants.py and iohub.datastore.__init__.py to add PSTBOX_BUTTON and event type
+    # table creation
 
     def __init__(self, *args, **kwargs):
         # super(PSTBoxByteChangeEvent, self).__init__(*args, **kwargs)
