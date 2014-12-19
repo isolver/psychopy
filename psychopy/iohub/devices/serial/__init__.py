@@ -469,20 +469,21 @@ class PSTBox(Serial):
     EVENT_CLASS_NAMES = ['SerialInputEvent', 'PSTBoxByteChangeEvent']
     DEVICE_TYPE_ID = DeviceConstants.PSTBOX
     DEVICE_TYPE_STRING = "PSTBOX"
+    # Only add new attributes for the subclass, the device metaclass pulls them together. 
     _serial_slots = [
-        'port', 'baud', 'bytesize', 'parity', 'stopbits', '_serial',
-        '_timeout', '_rx_buffer', '_parser_config', '_parser_state',
-        '_event_count', '_byte_diff_mode','_custom_parser',
-        '_custom_parser_kwargs', '_nlamps', '_lamp_state',
+        '_nlamps', '_lamp_state',
         '_streaming_state', '_button_query_state', '_state',
-        '_button_bytes'
+        '_button_bytes', '_nbuttons'
     ]
     __slots__ = [e for e in _serial_slots]
 
     def __init__(self, *args, **kwargs):
         Serial.__init__(self, *args, **kwargs['dconfig'])
-        # super(PSTBox, self).__init__(*args, **kwargs['dconfig'])
 
+        # Any class instance attribute must be specified in the __slots__ list.
+        # So '_nbuttons' needs to be added to __slots__ for this class.
+        # If uses a class level attribute, when it makes sense, then this does not need to
+        # be in slots.
         self._nbuttons = 5
         # Buttons 0--4, from left to right:
         # [1, 2, 4, 8, 16]
@@ -645,10 +646,8 @@ class SerialByteChangeEvent(DeviceEvent):
 
 
 class PSTBoxByteChangeEvent(SerialByteChangeEvent):
+    # Add only new fields for PSTBoxByteChangeEvent
     _newDataTypes = [
-        ('port', N.str, 32),
-        ('prev_byte', N.uint8),
-        ('current_byte', N.uint8),
         ('button', N.uint8),
         ('button_event', N.str, 7)
     ]
