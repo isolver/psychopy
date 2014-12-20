@@ -600,7 +600,7 @@ class PSTBox(Serial):
 
         events = [
             0, 0, 0, Computer._getNextEventID(),
-            EventConstants.SERIAL_BYTE_CHANGE,
+            EventConstants.PSTBOX_BUTTON,
             read_time,
             logged_time,
             read_time,
@@ -608,8 +608,6 @@ class PSTBox(Serial):
             0.0,
             0,
             self.port,
-            prev_byte,
-            new_byte,
             button,
             button_event
         ]
@@ -644,27 +642,21 @@ class SerialByteChangeEvent(DeviceEvent):
     def __init__(self, *args, **kwargs):
         DeviceEvent.__init__(self, *args, **kwargs)
 
-# Renaming to more meaningful name (is this correct?)
-class PstBoxButtonEvent(SerialByteChangeEvent):
-    # Add only new fields for PstBoxButtonEvent
+class PstBoxButtonEvent(DeviceEvent):
+    # Add new fields for PstBoxButtonEvent
     _newDataTypes = [
+        ('port', N.str, 32), # could be needed to identify events from >1 connected button box; if that is ever supported.
         ('button', N.uint8),
         ('button_event', N.str, 7)
     ]
 
     __slots__ = [e[0] for e in _newDataTypes]
-    
-    # This should now work assuming prev_byte and current_byte fields are
-    # really wanted for this event type.
-    
-    # Regardless, the following changes need to be added to this file, 
+
+    # Specify Event constants associated with the event class, 
+    # and the key to the hdf5 table these events should be stored in.
     EVENT_TYPE_ID = EventConstants.PSTBOX_BUTTON
     EVENT_TYPE_STRING = 'PSTBOX_BUTTON'
     IOHUB_DATA_TABLE = EVENT_TYPE_STRING    
-    
-    # DONE: Update constants.py and iohub.datastore.__init__.py to add PSTBOX_BUTTON and event type
-    # table creation
 
     def __init__(self, *args, **kwargs):
-        # super(PSTBoxByteChangeEvent, self).__init__(*args, **kwargs)
-        SerialByteChangeEvent.__init__(self, *args, **kwargs)
+        DeviceEvent.__init__(self, *args, **kwargs)
