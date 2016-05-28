@@ -162,7 +162,7 @@ class Keyboard(ioHubDeviceView):
     def __init__(self, ioclient, dev_cls_name, dev_config):
         super(Keyboard, self).__init__(ioclient, dev_cls_name, dev_config)
         self._events = dict()
-        self._reporting = False
+        self._reporting = self.isReportingEvents()
         self._pressed_keys = {}
         self._device_config = dev_config
         self._event_buffer_length = dev_config.get('event_buffer_length')

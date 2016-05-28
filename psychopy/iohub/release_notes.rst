@@ -8,11 +8,11 @@ Enhancements
 - ioSync Device now supports generating keyboard events using
   iosync.generateKeyboardEvent() device method. Limitations exist.....
 - launchHubServer() should now be able to replace iohubExpRuntime class
-- other than 'data_store', launchHubServer supports updating 
+- other than 'data_store', launchHubServer supports updating
   psychopy/iohub/default_config.yaml settings by adding kwargs that match the
   files keys. For example, to set the iohub Server UDP port to a custom value:
-     io = launchHubServer(udp_port=1234) 
-- launchHubServer builds the monitor_devices list by combining 
+     io = launchHubServer(udp_port=1234)
+- launchHubServer builds the monitor_devices list by combining
   devices found using the 'iohub_config_name' kwarg with any devices defined
   in the function's kwarg dict itself.
 
@@ -22,8 +22,10 @@ Bugs Fixed
 - mouse.setPosition was not correctly setting y position
 - fixed bug in iohubdelaytest demo that was stopping it from running.
 - Analog Input implementation for Measurement Computing works on python 64bit
-- coder\iohub\network demo was referencing non-existant KeyboardChar event type.
-
+- coder\iohub\network demo was referencing non-existent KeyboardChar event type.
+- io.clearEvents() was not clearing any locally cached events in
+  psychopy.io.client.Keyboard class.
+  
 User API Backwards Incompatibles
 --------------------------------
 
@@ -45,7 +47,7 @@ iohub Package
 
 - Created iohub.removed module that holds any modules completely removed
   from psychopy.iohub. This allows user scripts that rely on this
-  code to just change import for the short term. User scripts must switch to 
+  code to just change import for the short term. User scripts must switch to
   using alternatives ASAP since iohub.removed will be deleted in a
   future release.
 
@@ -68,7 +70,7 @@ iohub Package
 - ioHubExperimentRuntime class is no longer supported. Use
   psychopy.iohub.client.launchHubServer() instead.
 
-- Removed psychopy.iohub.client.expruntime module. 
+- Removed psychopy.iohub.client.expruntime module.
  (psychopy.iohub.client.expruntime -> psychopy.iohub.removed.client.expruntime)
 
 ioHubConnection Class
