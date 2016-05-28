@@ -38,7 +38,7 @@ class TestKeyboard(object):
         cls.io = startHubProcess(iohub_config)
         cls.keyboard = cls.io.devices.keyboard
         cls.iosync = cls.io.getDevice('mcu')
-        assert cls.iosync is not None
+        #assert cls.iosync is not None
         if cls.iosync and not cls.iosync.isConnected():
             #assert iosync is not None, "iosync device requested but devvice is None."
             #assert iosync.isConnected(), "iosync device requested but isConnected() == False"
@@ -104,41 +104,80 @@ class TestKeyboard(object):
                 assert mindur < kbe.duration < maxdur
 
     def test_getEvents(self):
+        self.io.clearEvents()
         evts = self.keyboard.getEvents()
         assert isinstance(evts, (list, tuple))
 
     def test_getKeys(self):
         # getKeys(self, keys=None, chars=None, mods=None, duration=None,
         #         etype = None, clear = True)
+        self.io.clearEvents()
         if self.iosync:
-            self.io.clearEvents()
-            self.iosync.generateKeyboardEvent('a', [], 0.2)
+            # Use iosync as keyboard device to generate actual keyboard
+            # events so iohub event fields can be checked for accuracy.
 
-            kb_events = self.get_kb_events(self.keyboard.getKeys, 0.3)
+            # 'a' key pressed on iosync keyboard with no modifiers. Key is
+            # released after 0.2 seconds.
+            pressed_dur = 0.2
+            self.iosync.generateKeyboardEvent('a', [], pressed_dur)
 
+            # Call self.keyboard.getKeys() repeatedly for 0.3 seconds
+            # and return any events received from getKeys() during that
+            # time period
+            kb_events = self.get_kb_events(self.keyboard.getKeys,
+                                           pressed_dur + 0.1)
+
+            # The two 'a' key press and release events should have been
+            # reported by iohub.
             assert len(kb_events) == 2
             kp = kb_events[0]
             kr = kb_events[1]
-
+            # Validate each event contains the expected values.
             self.validate_kb_event(kp, is_press=True, ekey='a', echar=u'a')
-            self.validate_kb_event(kr, is_press=False, ekey='a', echar=u'a', edur=0.2, kbpress=kp)
-
-
-
+            self.validate_kb_event(kr, is_press=False, ekey='a', echar=u'a',
+                                   edur=pressed_dur, kbpress=kp)
         else:
+            # No keyboard events are generated, so we can only check that
+            # .getKeys() runs without error and returns an empty list.
             evts = self.keyboard.getKeys()
             assert isinstance(evts, (list, tuple))
 
     def test_getPresses(self):
         # getPresses(self, keys=None, chars=None, mods=None, clear=True)
-        evts = self.keyboard.getPresses()
-        assert isinstance(evts, (list, tuple))
+        self.io.clearEvents()
+        if self.iosync:
+            self.iosync.generateKeyboardEvent('b', [], 0.1)
+            kb_events = self.get_kb_events(self.keyboard.getPresses, 0.2)
+
+            assert len(kb_events) == 1
+            self.validate_kb_event(kb_events[0], is_press=True, ekey='b',
+                                   echar=u'b')
+        else:
+            evts = self.keyboard.getPresses()
+            assert isinstance(evts, (list, tuple))
 
     def test_getReleases(self):
         # getReleases(self, keys=None, chars=None, mods=None, duration=None,
         #             clear = True)
-        evts = self.keyboard.getReleases()
-        assert isinstance(evts, (list, tuple))
+        self.io.clearEvents()
+        if self.iosync:
+            pressed_dur = 0.2
+            self.iosync.generateKeyboardEvent('c', [], pressed_dur)
+
+
+            kb_releases = self.get_kb_events(self.keyboard.getReleases,
+                                             pressed_dur + 0.1)
+            assert len(kb_releases) == 1,[(e.time, e.type, e.key) for e in kb_releases]
+
+            kb_presses = self.keyboard.getPresses()
+            assert len(kb_presses) == 1
+
+            self.validate_kb_event(kb_releases[0], is_press=False, ekey='c',
+                                   echar=u'c', edur=pressed_dur,
+                                   kbpress=kb_presses[0])
+        else:
+            evts = self.keyboard.getReleases()
+            assert isinstance(evts, (list, tuple))
 
     def test_waitForKeys(self):
         # waitForKeys(maxWait, keys, chars, mods, duration, etype, clear,

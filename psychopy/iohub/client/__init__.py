@@ -240,7 +240,7 @@ class ioHubConnection(object):
                     ioHubConfig)
 
         if ioHubConnection.ACTIVE_CONNECTION is not None:
-            raise AttributeError('An existing ioHubConnection is already open.'
+            raise RuntimeError('An existing ioHubConnection is already open.'
                                  ' Use ioHubConnection.getActiveConnection() '
                                  'to access it; or use ioHubConnection.quit() '
                                  'to close it.')
@@ -398,12 +398,20 @@ class ioHubConnection(object):
             None
 
         """
-        if device_label is None:
-            self.allEvents = []
-            self._sendToHubServer(('RPC', 'clearEventBuffer', [False, ]))
-        elif device_label.lower() == 'all':
+        if device_label.lower() == 'all':
             self.allEvents = []
             self._sendToHubServer(('RPC', 'clearEventBuffer', [True, ]))
+            try:
+                self.getDevice('keyboard')._clearLocalEvents()
+            except:
+                pass
+        elif device_label in [None, '', False]:
+            self.allEvents = []
+            self._sendToHubServer(('RPC', 'clearEventBuffer', [False, ]))
+            try:
+                self.getDevice('keyboard')._clearLocalEvents()
+            except:
+                pass
         else:
             d = self.deviceByLabel.get(device_label, None)
             if d:
@@ -618,9 +626,9 @@ class ioHubConnection(object):
         :return: None
 
         """
-        data = []        
+        data = []
         if isinstance(cv_row, (list, tuple)):
-            data = list(cv_row)            
+            data = list(cv_row)
         elif self._cv_order:
             for cv_name in self._cv_order:
                 data.append(cv_row[cv_name])
@@ -630,7 +638,7 @@ class ioHubConnection(object):
         for i, d in enumerate(data):
             if isinstance(d, unicode):
                 data[i] = d.encode('utf-8')
-                
+
         cvt_rpc = ('RPC', 'extendConditionVariableTable',
                    (self.experimentID, self.experimentSessionID, data))
         r = self._sendToHubServer(cvt_rpc)
