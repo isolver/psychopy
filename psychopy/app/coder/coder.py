@@ -31,6 +31,7 @@ import py_compile
 
 from . import psychoParser, introspect
 from .. import stdOutRich, dialogs
+from .. import projects
 from psychopy import logging
 from ..localization import _translate
 
@@ -524,9 +525,6 @@ class CodeEditor(wx.stc.StyledTextCtrl):
         self.CmdKeyClear(ord('/'), wx.stc.STC_SCMOD_CTRL |
                          wx.stc.STC_SCMOD_SHIFT)
 
-        self.SetLexer(wx.stc.STC_LEX_PYTHON)
-        self.SetKeyWords(0, " ".join(keyword.kwlist))
-
         self.SetProperty("fold", "1")
         # 4 means 'tabs are bad'; 1 means 'flag inconsistency'
         self.SetProperty("tab.timmy.whinge.level", "4")
@@ -551,8 +549,6 @@ class CodeEditor(wx.stc.StyledTextCtrl):
         self.SetMarginMask(2, wx.stc.STC_MASK_FOLDERS)
         self.SetMarginSensitive(2, True)
         self.SetMarginWidth(2, 12)
-
-        self.SetIndentationGuides(self.coder.appData['showIndentGuides'])
 
         # Like a flattened tree control using square headers
         self.MarkerDefine(wx.stc.STC_MARKNUM_FOLDEROPEN,
@@ -587,6 +583,9 @@ class CodeEditor(wx.stc.StyledTextCtrl):
         if not readonly:
             self.setFonts()
         self.SetDropTarget(FileDropTarget(coder=self.coder))
+
+        # set to python syntax code coloring
+        self.setLexer('python')
 
     def setFonts(self):
         """Make some styles,  The lexer defines what each style is used for,
@@ -1214,6 +1213,30 @@ class CodeEditor(wx.stc.StyledTextCtrl):
                     'is': thisIs, 'type': thisType,
                     'attrs': thisAttrs, 'help': thisHelp}
 
+    def setLexer(self, lexer=None):
+        """Lexer is a simple string (e.g. 'python', 'html')
+        that will be converted to use the right STC_LEXER_XXXX value
+        """
+        try:
+            lex = getattr(wx.stc, "STC_LEX_%s" %(lexer.upper()))
+        except AttributeError:
+            logging.warn("Unknown lexer %r. Using 'python' instead" %lexer)
+            lex = wx.stc.STC_LEX_PYTHON
+            lexer = 'python'
+        # then actually set it
+        self.SetLexer(lex)
+        if lexer == 'python':
+            self.SetKeyWords(0, " ".join(keyword.kwlist))
+            self.SetIndentationGuides(self.coder.appData['showIndentGuides'])
+            self.SetStyleBits(5)  # in case we had html before
+        elif lexer.lower() == 'html':
+            self.SetStyleBits(7)  # apprently!
+        else:
+            self.SetIndentationGuides(0)
+            self.SetProperty("tab.timmy.whinge.level", "0")
+
+        self.Colourise(0, -1)
+
     def onModified(self, event):
         # update the UNSAVED flag and the save icons
         notebook = self.GetParent()
@@ -1453,6 +1476,7 @@ class CoderFrame(wx.Frame):
             self.Fit()
             self.paneManager.Update()
         self.SendSizeEvent()
+        self.app.trackFrame(self)
 
     def makeMenus(self):
         # ---Menus---#000000#FFFFFF-------------------------------------------
@@ -1747,6 +1771,10 @@ class CoderFrame(wx.Frame):
             self.demos[thisID] = filename
             wx.EVT_MENU(self, thisID, self.loadDemo)
 
+        # ---_projects---#000000#FFFFFF---------------------------------------
+        self.projectsMenu = projects.ProjectsMenu(parent=self)
+        menuBar.Append(self.projectsMenu, "P&rojects")
+
         # ---_help---#000000#FFFFFF-------------------------------------------
         self.helpMenu = wx.Menu()
         menuBar.Append(self.helpMenu, _translate('&Help'))
@@ -2029,7 +2057,7 @@ class CoderFrame(wx.Frame):
         """Close open windows, update prefs.appData (but don't save)
         and either close the frame or hide it
         """
-        if len(self.app.builderFrames) == 0 and sys.platform != 'darwin':
+        if len(self.app.getAllFrames(frameType="builder")) == 0 and sys.platform != 'darwin':
             if not self.app.quitting:
                 # send the event so it can be vetoed if neded
                 self.app.quit(event)
@@ -2074,7 +2102,7 @@ class CoderFrame(wx.Frame):
         # as of wx3.0 the AUI manager needs to be uninitialised explicitly
         self.paneManager.UnInit()
 
-        self.app.allFrames.remove(self)
+        self.app.forgetFrame(self)
         self.Destroy()
         self.app.coder = None
 
@@ -2146,7 +2174,22 @@ class CoderFrame(wx.Frame):
             else:
                 self.currentDoc.SetText("")
             self.currentDoc.EmptyUndoBuffer()
-            self.currentDoc.Colourise(0, -1)
+            if filename.endswith('.py'):
+                self.currentDoc.setLexer('python')
+            elif filename.endswith('.m'):
+                self.currentDoc.setLexer('matlab')
+            elif filename.endswith('.sh'):
+                self.currentDoc.setLexer('bash')
+            elif filename.endswith('.c'):
+                self.currentDoc.setLexer('c')
+            elif filename.endswith('.html'):
+                self.currentDoc.setLexer('html')
+            elif filename.endswith('.R'):
+                self.currentDoc.setLexer('r')
+            elif filename.endswith('.xml'):
+                self.currentDoc.setLexer('xml')
+            elif filename.endswith('.yaml'):
+                self.currentDoc.setLexer('yaml')
 
             # line numbers in the margin
             self.currentDoc.SetMarginType(1, wx.stc.STC_MARGIN_NUMBER)
