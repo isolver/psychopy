@@ -56,7 +56,7 @@ iohub Package
 - Removed following modules from psychopy.iohub.util. All have been
   temporarily moved to psychopy.iohub.removed.xxxxxx:
     - dialogs module. ioHub demo's and internal code now use psychopy.gui
-      equivelents instead.
+      equivalents instead.
     - images module. Was only used by util.dialogs.
     - visualUtil module. While useful functionality, out of scope for
       psychopy.iohub. If needed, file can be copied to same folder as user
