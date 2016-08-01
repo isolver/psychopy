@@ -1086,6 +1086,22 @@ class CodeEditor(wx.stc.StyledTextCtrl):
             newText = newText + lineText
         self._ReplaceSelectedLines(newText)
 
+    def Paste(self, event=None):
+        dataObj = wx.TextDataObject()
+        clip = wx.Clipboard().Get()
+        clip.Open()
+        success = clip.GetData(dataObj)
+        clip.Close()
+        if success:
+            txt = dataObj.GetText()
+            try:
+                # if we can decode/encode to utf-8 then all is good
+                txt.decode('utf-8')
+            except:
+                # if not then wx conversion broek so get raw data instead
+                txt = dataObj.GetDataHere()
+            self.ReplaceSelection(txt)
+
     def _GetSelectedLineNumbers(self):
         # used for the comment/uncomment machinery from ActiveGrid
         selStart, selEnd = self._GetPositionsBoundingSelectedLines()
@@ -1773,7 +1789,7 @@ class CoderFrame(wx.Frame):
 
         # ---_projects---#000000#FFFFFF---------------------------------------
         self.projectsMenu = projects.ProjectsMenu(parent=self)
-        menuBar.Append(self.projectsMenu, "P&rojects")
+        menuBar.Append(self.projectsMenu, _translate("P&rojects"))
 
         # ---_help---#000000#FFFFFF-------------------------------------------
         self.helpMenu = wx.Menu()
