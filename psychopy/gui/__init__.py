@@ -15,9 +15,12 @@ from __future__ import absolute_import
 
 haveQt = False  # until we find otherwise
 
-import wx
-
-if wx.GetApp() is None:  # i.e. don't try this if wx is already running
+try:
+    import wx
+except ImportError:
+    wx = None
+    
+if wx is None or wx.GetApp() is None:  # i.e. don't try this if wx is already running
     try:
         import PyQt4
         haveQt = True

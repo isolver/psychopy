@@ -248,7 +248,14 @@ class DataStoreFile():
         expcv_node = self.emrtFile.root.data_collection.condition_variables
         exp_session = [('EXPERIMENT_ID', 'i4'), ('SESSION_ID', 'i4')]
         exp_session.extend(np_dtype)
-        np_dtype = exp_session
+        np_dtype = []
+        for npctype in exp_session:
+            if isinstance(npctype[0], unicode):
+                nv = [str(npctype[0]),]
+                nv.extend(npctype[1:])
+                np_dtype.append(tuple(nv))
+            else:
+                np_dtype.append(npctype)
         self._EXP_COND_DTYPE = np.dtype(np_dtype)
         try:
             expCondTableName = 'EXP_CV_%d' % (experiment_id)
