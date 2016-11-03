@@ -538,15 +538,23 @@ class ioServer(object):
                                                 'default_datastore.yaml')
                 _, def_ds_conf = yload(file(def_ds_conf_path, 'r'),
                                        Loader=yLoader).popitem()
-
                 for dkey, dvalue in def_ds_conf.iteritems():
                     if dkey not in ds_conf:
                         ds_conf[dkey] = dvalue
 
                 if ds_conf.get('enable', True):
+                    ds_dir = script_dir
                     hdf_name = ds_conf.get('filename', 'events') + '.hdf5'
-                    self.createDataStoreFile(hdf_name, script_dir, 'a',
-                                             ds_conf)
+                    hdf_parent_folder = ds_conf.get('parent_dir', '.')
+                    if hdf_parent_folder != '.':
+                        if os.path.isabs(hdf_parent_folder):
+                            ds_dir = hdf_parent_folder
+                        else:
+                            ds_dir = os.path.abspath(script_dir)
+                            ds_dir = os.path.normpath(os.path.join(ds_dir, hdf_parent_folder))
+                    if not os.path.exists(ds_dir):
+                        os.mkdir(ds_dir)
+                    self.createDataStoreFile(hdf_name, ds_dir, 'a', ds_conf)
         except Exception:
             print2err('Error during ioDataStore creation....')
             printExceptionDetailsToStdErr()
