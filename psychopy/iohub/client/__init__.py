@@ -835,7 +835,8 @@ class ioHubConnection(object):
         session_info = None
         hub_defaults_config = {}
         rootScriptPath = os.path.dirname(sys.argv[0])
-
+        if len(rootScriptPath)<=1:
+            rootScriptPath = os.path.abspath(".")
         # >>>>> Load / Create / Update iohub config file.....
 
         cfpath = os.path.join(IOHUB_DIRECTORY, 'default_config.yaml')

@@ -546,12 +546,12 @@ class ioServer(object):
                     ds_dir = script_dir
                     hdf_name = ds_conf.get('filename', 'events') + '.hdf5'
                     hdf_parent_folder = ds_conf.get('parent_dir', '.')
-                    if hdf_parent_folder != '.':
-                        if os.path.isabs(hdf_parent_folder):
-                            ds_dir = hdf_parent_folder
-                        else:
-                            ds_dir = os.path.abspath(script_dir)
-                            ds_dir = os.path.normpath(os.path.join(ds_dir, hdf_parent_folder))
+                    if os.path.isabs(hdf_parent_folder):
+                        ds_dir = hdf_parent_folder
+                    else:
+                        ds_dir = os.path.abspath(script_dir)
+                        ds_dir = os.path.normpath(os.path.join(ds_dir, hdf_parent_folder))
+
                     if not os.path.exists(ds_dir):
                         os.mkdir(ds_dir)
                     self.createDataStoreFile(hdf_name, ds_dir, 'a', ds_conf)
