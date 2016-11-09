@@ -460,7 +460,9 @@ def fileOpenDlg(tryFilePath="",
                    "txt (*.txt *.dlm *.csv);;"
                    "pickled files (*.pickle *.pkl);;"
                    "shelved files (*.shelf)")
-    fdir = os.path.join(tryFilePath, tryFileName)
+    fdir = tryFilePath    
+    if tryFileName:
+        fdir = os.path.join(tryFilePath, tryFileName)
     filesToOpen = QtWidgets.QFileDialog.getOpenFileNames(parent=None,
                                                          caption=prompt,
                                                          directory=fdir,
