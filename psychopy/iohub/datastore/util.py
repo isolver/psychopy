@@ -17,6 +17,10 @@ try:
 except Exception:
     _hubFiles = []
 
+try:
+    _translate("xxxx")
+except: 
+    _translate = lambda x: x
 
 def openHubFile(filepath, filename, mode):
     """Open an HDF5 DataStore file and register it so that it is closed even on
@@ -34,7 +38,7 @@ def displayDataFileSelectionDialog(starting_dir=None):
 
     filePathList = fileOpenDlg(starting_dir,
                                prompt=_translate("Select file to open"),
-                               allowed="Text files (\*.hdf5)")
+                               allowed="HDF files (*.hdf5)")
 
     if filePathList is None:
         print ' Data File Selection Cancelled.'

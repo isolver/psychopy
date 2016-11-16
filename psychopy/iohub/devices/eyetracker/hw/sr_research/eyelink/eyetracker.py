@@ -6,7 +6,11 @@
 import os
 import numpy as np
 import pylink
-from psychopy.gui.wxgui import ProgressBarDialog
+try:
+    from psychopy.gui.wxgui import ProgressBarDialog
+except ImportError:
+    ProgressBarDialog = None
+    
 from ......constants import EventConstants, EyeTrackerConstants
 from ...... import EXP_SCRIPT_DIRECTORY
 from ......errors import print2err, printExceptionDetailsToStdErr
@@ -1134,6 +1138,10 @@ class EyeTracker(EyeTrackerDevice):
                     'WARNING: unhandled eye tracker config setting:', pkey, v)
 
     def _fileTransferProgressUpdate(self, size, received):
+        if ProgressBarDialog is None:
+            print("eyelink._fileTransferProgressUpdate() not asupported: wx package not found")
+            return
+            
         if EyeTracker._file_transfer_progress_dialog is None:
             EyeTracker._file_transfer_progress_dialog = ProgressBarDialog(
                 'ioHub EyeLink(C) Interface',
