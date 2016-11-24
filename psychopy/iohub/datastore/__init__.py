@@ -15,26 +15,10 @@ from ..errors import print2err, printExceptionDetailsToStdErr, ioHubError
 from ..constants import EventConstants
 from ..devices import DeviceEvent
 
-tables.parameters.MAX_NUMEXPR_THREADS = None
-"""The maximum number of threads that PyTables should use internally in
-Numexpr.  If `None`, it is automatically set to the number of cores in
-your machine. In general, it is a good idea to set this to the number of
-cores in your machine or, when your machine has many of them (e.g. > 4),
-perhaps one less than this. < S. Simpson Note: These are 'not' GIL bound
-threads and therefore actually improve performance > """
-
-tables.parameters.MAX_BLOSC_THREADS = None
-"""The maximum number of threads that PyTables should use internally in
-Blosc.  If `None`, it is automatically set to the number of cores in
-your machine. In general, it is a good idea to set this to the number of
-cores in your machine or, when your machine has many of them (e.g. > 4),
-perhaps one less than this.  < S. Simpson Note: These are 'not' GIL bound
-threads and therefore actually improve performance > """
-
 DATA_FILE_TITLE = 'ioHub DataStore - Experiment Data File.'
-FILE_VERSION = '1.1'
+FILE_VERSION = '1.2'
 SCHEMA_AUTHORS = 'Sol Simpson'
-SCHEMA_MODIFIED_DATE = 'March 29th, 2016'
+SCHEMA_MODIFIED_DATE = 'November 24th, 2016'
 
 
 class DataStoreFile():
@@ -42,6 +26,9 @@ class DataStoreFile():
         self.fileName = fileName
         self.folderPath = folderPath
         self.filePath = os.path.join(folderPath, fileName)
+
+        if iohub_settings.get('multiple_sessions', True) is False:
+            fmode='w'
 
         self.settings = iohub_settings
 
@@ -157,7 +144,7 @@ class DataStoreFile():
                         self.flush()
                     except tables.NodeError:
                         self.TABLES[event_table_label] = self.groupNodeForEvent(event_cls)._f_get_child(self.eventTableLabel2ClassName(event_table_label))
-                    except Exception:
+                    except Exception, e:
                         print2err('---------------ERROR------------------')
                         print2err(
                             'Exception %s in iohub.datastore.updateDataStoreStructure:' %
@@ -169,7 +156,7 @@ class DataStoreFile():
                             '\tevent_table_label: {0}'.format(event_table_label))
                         print2err(
                             '\teventTableLabel2ClassName: {0}'.format(
-                                eventTableLabel2ClassName(event_table_label)))
+                                self.eventTableLabel2ClassName(event_table_label)))
                         print2err(
                             '\tgroupNodeForEvent(event_cls): {0}'.format(
                                 self.groupNodeForEvent(event_cls)))
