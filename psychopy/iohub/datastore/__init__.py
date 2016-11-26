@@ -27,7 +27,7 @@ class DataStoreFile():
         self.folderPath = folderPath
         self.filePath = os.path.join(folderPath, fileName)
 
-        if iohub_settings.get('multiple_sessions', True) is False:
+        if iohub_settings.get('multiple_sessions', True)  is False:
             fmode='w'
 
         self.settings = iohub_settings
@@ -43,7 +43,7 @@ class DataStoreFile():
 
         atexit.register(close_open_data_files, False)
 
-        if len(self.emrtFile.title) == 0:
+        if fmode == 'w' or len(self.emrtFile.title) == 0:
             self.buildOutTemplate()
             self.flush()
         else:
@@ -176,7 +176,7 @@ class DataStoreFile():
                     print2err('\tevent_cls_name: {0}'.format(event_cls_name))
                     print2err(
                         '\teventTableLabel2ClassName: {0}'.format(
-                            eventTableLabel2ClassName(event_table_label)))
+                            self.eventTableLabel2ClassName(event_table_label)))
                     print2err('----------------------------------------------')
 
     def addClassMapping(self, ioClass, ctable):
@@ -249,7 +249,7 @@ class DataStoreFile():
             expcv_table = expcv_node._f_getChild(
                 expCondTableName)
             self.TABLES['EXP_CV'] = expcv_table
-        except tables.NoSuchNodeError as nsne:
+        except tables.NoSuchNodeError:
             try:
                 expcv_table = self.emrtFile.createTable(
                     expcv_node,
@@ -414,13 +414,9 @@ def close_open_data_files(verbose):
             if verbose:
                 print2err('done')
 
-try:
-    global registered_close_open_data_files
-    if registered_close_open_data_files is True:
-        pass
-except Exception:
-    registered_close_open_data_files = True
-    atexit.register(close_open_data_files, False)
+
+registered_close_open_data_files = True
+atexit.register(close_open_data_files, False)
 
 ## ---------------------- Pytable Definitions ------------------- ##
 

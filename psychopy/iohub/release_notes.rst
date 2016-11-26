@@ -16,6 +16,15 @@ Enhancements
   devices found using the 'iohub_config_name' kwarg with any devices defined
   in the function's kwarg dict itself.
 
+DataStore Changes
+-----------------
+
+- Added 'multiple_sessions' config param to datastore section of iohub_config.
+  * If True (Default), > 1 sessions / participants data can be saved to a
+    single hdf5 file.
+  * If False, current session data overwrites any existing data in the hdf5
+    file.
+
 Bugs Fixed
 -----------
 
