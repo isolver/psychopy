@@ -553,7 +553,7 @@ class ioServer(object):
                         ds_dir = os.path.normpath(os.path.join(ds_dir, hdf_parent_folder))
 
                     if not os.path.exists(ds_dir):
-                        os.mkdir(ds_dir)
+                        os.makedirs(ds_dir)
                     self.createDataStoreFile(hdf_name, ds_dir, 'a', ds_conf)
         except Exception:
             print2err('Error during ioDataStore creation....')
