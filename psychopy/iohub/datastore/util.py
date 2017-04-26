@@ -231,7 +231,6 @@ class ExperimentDataAccessUtility(object):
         """
         if self.hdfFile:
             klassTables = self.hdfFile.root.class_table_mapping
-            deviceEventTable = None
             event_column = None
             event_value = None
 
@@ -258,6 +257,10 @@ class ExperimentDataAccessUtility(object):
                 row.fetch_all_fields() for row in klassTables.where(
                     '({0} == {1}) & (class_type_id == 1)'.format(
                         event_column, event_value))]
+
+            if len(result) == 0:
+                    return None
+                    
             if len(result) != 1:
                 print2err(
                     'event_type_id passed to getEventAttribute can only return one row from CLASS_MAPPINGS: ',
@@ -266,7 +269,7 @@ class ExperimentDataAccessUtility(object):
 
             tablePathString = result[0][3]
             return self.hdfFile.getNode(tablePathString)
-        return None
+
 
     def getEventMappingInformation(self):
         """Returns details on how ioHub Event Types are mapped to tables within
