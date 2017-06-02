@@ -134,16 +134,17 @@ class Keyboard(ioHubKeyboardDevice):
         modKeyName = Keyboard._win32_modifier_mapping.get(keyID, None)
         if modKeyName:
             mod_value = KeyboardConstants._modifierCodes.getID(modKeyName)
+            mod_set = ioHubKeyboardDevice._modifier_value&mod_value == mod_value
+ 
             if keyID not in [win32_vk.VK_CAPITAL, win32_vk.VK_SCROLL,
                              win32_vk.VK_NUM_LOCK]:
-                if is_press:
+                if is_press and not mod_set:
                     ioHubKeyboardDevice._modifier_value += mod_value
-                else:
+                elif not is_press and mod_set:
                     ioHubKeyboardDevice._modifier_value -= mod_value
             else:
                 if is_press:
-                    if (ioHubKeyboardDevice._modifier_value &
-                            mod_value) == mod_value:
+                    if mod_set:
                         ioHubKeyboardDevice._modifier_value -= mod_value
                     else:
                         ioHubKeyboardDevice._modifier_value += mod_value
