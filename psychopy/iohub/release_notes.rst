@@ -31,8 +31,10 @@ Bugs Fixed
 - mouse.setPosition was not correctly setting y position
 - fixed bug in iohubdelaytest demo that was stopping it from running.
 - Analog Input implementation for Measurement Computing works on python 64bit
-- coder\iohub\network demo was referencing non-existant KeyboardChar event type.
-
+- coder\iohub\network demo was referencing non-existent KeyboardChar event type.
+- io.clearEvents() was not clearing any locally cached events in
+  psychopy.io.client.Keyboard class.
+  
 User API Backwards Incompatibles
 --------------------------------
 

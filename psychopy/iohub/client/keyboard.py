@@ -162,7 +162,7 @@ class Keyboard(ioHubDeviceView):
     def __init__(self, ioclient, dev_cls_name, dev_config):
         super(Keyboard, self).__init__(ioclient, dev_cls_name, dev_config)
         self._events = dict()
-        self._reporting = False
+        self._reporting = self.isReportingEvents()
         self._pressed_keys = {}
         self._device_config = dev_config
         self._event_buffer_length = dev_config.get('event_buffer_length')
@@ -170,6 +170,13 @@ class Keyboard(ioHubDeviceView):
         self._clearEventsRPC = DeviceRPC(self.hubClient._sendToHubServer,
                                          self.device_class,
                                          'clearEvents')
+
+    def _clearLocalEvents(self,  event_type=None):
+        for etype, elist in self._events.items():
+            if event_type is None:
+                elist.clear()
+            elif event_type == etype:
+                elist.clear()
 
     def _syncDeviceState(self):
         """An optimized iohub server request that receives all device state and
@@ -237,13 +244,11 @@ class Keyboard(ioHubDeviceView):
         self._reporting = self.enableEventReporting(r)
         return self._reporting
 
+
     def clearEvents(self, event_type=None, filter_id=None):
-        result = self._clearEventsRPC(
-            event_type=event_type, filter_id=filter_id)
-        for etype, elist in self._events.items():
-            if event_type is None or event_type == etype:
-                elist.clear()
-        return result
+        self._clearLocalEvents(event_type)
+        return self._clearEventsRPC(event_type=event_type,
+                                      filter_id=filter_id)
 
     def getKeys(self, keys=None, chars=None, mods=None, duration=None,
                 etype=None, clear=True):

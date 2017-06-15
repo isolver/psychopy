@@ -254,7 +254,7 @@ class ioHubConnection(object):
                     ioHubConfig)
 
         if ioHubConnection.ACTIVE_CONNECTION is not None:
-            raise AttributeError('An existing ioHubConnection is already open.'
+            raise RuntimeError('An existing ioHubConnection is already open.'
                                  ' Use ioHubConnection.getActiveConnection() '
                                  'to access it; or use ioHubConnection.quit() '
                                  'to close it.')
@@ -407,12 +407,20 @@ class ioHubConnection(object):
             None
 
         """
-        if device_label is None:
-            self.allEvents = []
-            self._sendToHubServer(('RPC', 'clearEventBuffer', [False, ]))
-        elif device_label.lower() == 'all':
+        if device_label.lower() == 'all':
             self.allEvents = []
             self._sendToHubServer(('RPC', 'clearEventBuffer', [True, ]))
+            try:
+                self.getDevice('keyboard')._clearLocalEvents()
+            except:
+                pass
+        elif device_label in [None, '', False]:
+            self.allEvents = []
+            self._sendToHubServer(('RPC', 'clearEventBuffer', [False, ]))
+            try:
+                self.getDevice('keyboard')._clearLocalEvents()
+            except:
+                pass
         else:
             d = self.devices.getDevice(device_label)
             if d:
