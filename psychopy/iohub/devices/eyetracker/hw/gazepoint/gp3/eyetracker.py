@@ -11,7 +11,7 @@ from ......constants import EventConstants, EyeTrackerConstants
 from ..... import Computer, Device
 from .... import EyeTrackerDevice
 from ....eye_events import *
-from gevent import socket
+from gevent import socket, sleep
 import errno
 
 ET_UNDEFINED = EyeTrackerConstants.UNDEFINED
@@ -176,6 +176,30 @@ class EyeTracker(EyeTrackerDevice):
         if self._gp3:
             return self.trackerTime() * self.DEVICE_TIMEBASE_TO_SEC
         return EyeTrackerConstants.EYETRACKER_ERROR
+        
+    def _sendRequest(self, rtype, ID, **kwargs):
+        params = ''
+        for k,v in kwargs.items():
+            params += ' {}="{}"'.format(k, v)
+        rqstr = '<{} ID="{}" {} />\r\n'.format(rtype, ID, params)
+        #print2err("Sending: {}\n".format(rqstr))
+        self._gp3.sendall(str.encode(rqstr))        
+        
+    def _gp3set(self, ID, **kwargs):
+        self._sendRequest("SET", ID, **kwargs)     
+
+    def _gp3get(self, ID, **kwargs):
+        self._sendRequest("GET", ID, **kwargs)     
+        
+    def _waitForAck(self, type_id, timeout=5.0):
+        stime = getTime()
+        while getTime() - stime < timeout:
+            self._checkForNetData(0.25)
+            msgs = self._parseRxBuffer()
+            for m in msgs:
+                if m.get('ID') == type_id:
+                    return m
+        return None
 
     def _checkForNetData(self, timeout=0):
         self._gp3.settimeout(timeout)
@@ -263,9 +287,12 @@ class EyeTracker(EyeTrackerDevice):
                 init_connection_str += '<SET ID="ENABLE_SEND_TIME" STATE="1" />\r\n'
                 init_connection_str += '<SET ID="ENABLE_SEND_TIME_TICK" STATE="1" />\r\n'
                 self._gp3.sendall(str.encode(init_connection_str))
+                
                 # block for upp to 1 second to get reply txt.
-                strStatus = self._checkForNetData(1.0)
-                if strStatus:
+                #strStatus = self._checkForNetData(1.0)
+                #print2err("strStatus: ",strStatus)
+                                
+                if self._waitForAck('ENABLE_SEND_TIME_TICK'):
                     self._rx_buffer = ''
                     return True
                 else:
@@ -389,6 +416,31 @@ class EyeTracker(EyeTrackerDevice):
             return self._recording
         return False
 
+    def runSetupProcedure(self,starting_state=None):
+        """runSetupProcedure opens the GP3 Calibration window.
+        """
+        
+        cal_config = self.getConfiguration().get('calibration')
+        targ_timeout = cal_config.get('target_duration')
+        targ_delay = cal_config.get('target_delay')
+        self._gp3set('CALIBRATE_TIMEOUT', VALUE=targ_timeout)  
+        self._gp3set('CALIBRATE_DELAY', VALUE=targ_delay)        
+        self._waitForAck('CALIBRATE_DELAY', timeout=2.0)
+
+        self._gp3set('CALIBRATE_SHOW', STATE=1)  
+        self._gp3set('CALIBRATE_START', STATE=1)  
+        cal_result = self._waitForAck('CALIB_RESULT', timeout=30.0)
+
+        if cal_result:        
+            #print2err("GP3 calibration done.")
+            #print2err("Closing GP3 calibration window....")
+            self._gp3set('CALIBRATE_SHOW', STATE=0)  
+            self._gp3get('CALIBRATE_RESULT_SUMMARY')
+    
+            cal_result['SUMMARY']=self._waitForAck('CALIBRATE_RESULT_SUMMARY')
+        #print2err("CAL_RESULT: ",cal_result)
+        return cal_result
+        
     def _poll(self):
         """This method is called by gp3 every n msec based on the polling
         interval set in the eye tracker config.
@@ -413,7 +465,7 @@ class EyeTracker(EyeTrackerDevice):
 
             # Parse any rx text received from the gp3 into msg dicts.
             msgs = self._parseRxBuffer()
-            for m in msgs:
+            for m in msgs:   
                 if m.get('type') == 'REC':
                     # Always tracks binoc, so always use BINOCULAR_EYE_SAMPLE
                     event_type = EventConstants.BINOCULAR_EYE_SAMPLE
@@ -533,7 +585,7 @@ class EyeTracker(EyeTrackerDevice):
                         (binocSample, (combined_gaze_x, combined_gaze_y)))
 
                 elif m.get('type') == 'ACK':
-                    print2err('ACK Received: ', m)
+                    pass #print2err('ACK Received: ', m)
                 else:
                     # Message type is not being handled.
                     print2err('UNHANDLED GP3 MESSAGE: ', m)

@@ -12,18 +12,23 @@ TRIAL_COUNT = 2
 # Note: No iohub config .yaml files are needed in this demo
 # Since no experiment or session code is given, no iohub hdf5 file
 # will be saved, but device events are still available at runtime.
-runtime_settings = dict()
-runtime_settings['sampling_rate'] = 500
-runtime_settings['track_eyes'] = 'RIGHT'
-iohub_config = {'eyetracker.hw.sr_research.eyelink.EyeTracker':
-                {'name': 'tracker',
-                 #'simulation_mode': True,
-                 'model_name': 'EYELINK 1000 DESKTOP',
-                 'runtime_settings': runtime_settings
-                 },
-                }
+#runtime_settings = dict()
+#runtime_settings['sampling_rate'] = 500
+#runtime_settings['track_eyes'] = 'RIGHT'
+#iohub_config = {'eyetracker.hw.sr_research.eyelink.EyeTracker':
+#                {'name': 'tracker',
+#                 #'simulation_mode': True,
+#                 'model_name': 'EYELINK 1000 DESKTOP',
+#                 'runtime_settings': runtime_settings
+#                 },
+#
+#                }
+
+iohub_config = {'eyetracker.hw.gazepoint.gp3.EyeTracker':
+                {'name': 'tracker'}}
+                
 # Uncomment experiment_code setting to enable saving data to hdf5 file.
-#iohub_config['experiment_code'] = 'et_simple'
+iohub_config['experiment_code'] = 'et_simple'
 
 io = launchHubServer(**iohub_config)
 
@@ -34,7 +39,9 @@ tracker = io.devices.tracker
 
 # run eyetracker calibration
 r = tracker.runSetupProcedure()
-
+if r:
+    print("Calibration Result: {}".format(r))
+    
 # Create a default PsychoPy Window and stim to use in trials
 win = visual.Window(display.getPixelResolution(),
                     units='pix',

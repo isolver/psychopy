@@ -1,5 +1,7 @@
 # TODO GP3 Implementation
 # The current settings and params may make not sense for the GP3 implementation
+#
+#
 eyetracker.hw.gazepoint.gp3.EyeTracker:
     # Indicates if the device should actually be loaded at experiment runtime.
     enable: True
@@ -28,6 +30,16 @@ eyetracker.hw.gazepoint.gp3.EyeTracker:
 
     device_timer:
         interval: 0.005
+
+    calibration:        
+        # target_duration is the number of sec.msec that a calibration point should
+        # be displayed before moving onto the next point.
+        # (Sets the GP3 CALIBRATE_TIMEOUT)
+        target_duration: 1.25
+        # target_delay specifies the target animation duration in sec.msec.
+        # (Sets the GP3 CALIBRATE_DELAY)
+        target_delay: 0.5
+        
 
     # The model name of the device.
     model_name: GP3
