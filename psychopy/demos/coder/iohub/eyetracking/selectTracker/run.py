@@ -35,6 +35,7 @@ eye_tracker_config_files = {
     'SMI iViewX': 'eyetracker_configs/iviewx_config.yaml',
     'SR Research EyeLink': 'eyetracker_configs/eyelink_config.yaml',
     'Tobii Technologies Eye Trackers': 'eyetracker_configs/tobii_config.yaml',
+    'GazePoint 3': 'eyetracker_configs/gp3_config.yaml',
     }
 
 def selectTrackerConfig():
@@ -46,7 +47,8 @@ def selectTrackerConfig():
             'LC Technologies EyeGaze',
             'SMI iViewX',
             'SR Research EyeLink',
-            'Tobii Technologies Eye Trackers']}
+            'Tobii Technologies Eye Trackers',
+            'GazePoint 3']}
 
     dlg_info = dict(info)
     infoDlg = gui.DlgFromDict(
