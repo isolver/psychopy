@@ -25,7 +25,7 @@ TRIAL_COUNT = 2
 #                }
 
 iohub_config = {'eyetracker.hw.gazepoint.gp3.EyeTracker':
-                {'name': 'tracker'}}
+                {'name': 'tracker', 'device_timer': {'interval': 0.005}}}
                 
 # Uncomment experiment_code setting to enable saving data to hdf5 file.
 iohub_config['experiment_code'] = 'et_simple'

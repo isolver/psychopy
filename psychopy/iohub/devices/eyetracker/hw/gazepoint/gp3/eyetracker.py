@@ -1,4 +1,4 @@
-"""ioHub Common Eye Tracker Interface"""
+from __future__ import division
 # -*- coding: utf-8 -*-
 # Part of the psychopy.iohub library.
 # Copyright (C) 2012-2016 iSolver Software Solutions
@@ -12,12 +12,31 @@ from ..... import Computer, Device
 from .... import EyeTrackerDevice
 from ....eye_events import *
 from gevent import socket, sleep
-import errno
+import sys, errno
 
 ET_UNDEFINED = EyeTrackerConstants.UNDEFINED
 getTime = Computer.getTime
 
+#### TEMP >>>>
+if sys.platform == 'win32':
+    from ctypes import byref, c_int64, windll
+    _fcounter_ = c_int64()
+    _qpfreq_ = c_int64()
+    windll.Kernel32.QueryPerformanceFrequency(byref(_qpfreq_))
+    _qpfreq_ = float(_qpfreq_.value)
+    _winQPC_ = windll.Kernel32.QueryPerformanceCounter
 
+    def getGP3Time():
+        _winQPC_(byref(_fcounter_))
+        return _fcounter_.value / _qpfreq_
+else:
+    def getGP3Time():
+        return getTime()
+        
+_last_evt_tick_sec = 0.0
+##### END TEMP
+        
+        
 def to_numeric(lit):
     """Return value of a numeric literal string. If the string can not be
     converted then the original string is returned.
@@ -73,9 +92,10 @@ class EyeTracker(EyeTrackerDevice):
 
     The Gazepoint GP3 interface supports:
     * connection / disconnection to the GP3 device.
+    * Starting the GP3 Calibration procedure.
     * Starting / stopping when eye position data is collected.
     * Sending text messages to the GP3 system.
-    * current gaze position information, using the FPOGX, FPOGY fields from
+    * Current gaze position information, using the FPOGX, FPOGY fields from
       the most receint REC message received from the GP3
     * Generation of the BinocularEyeSampleEvent type based on the GP3 REC
       message type. The following fields of an eye sample event are populated
@@ -98,7 +118,6 @@ class EyeTracker(EyeTrackerDevice):
 
     The following functionality has not yet been implemented in the ioHub GP3
     interface:
-    * Built-in calibration graphics
     * Calculation of the REC event delay in ioHub. Therefore the event time
       stamps should not be considered msec accurate.
     """
@@ -116,8 +135,7 @@ class EyeTracker(EyeTrackerDevice):
         'BlinkStartEvent',
         'BlinkEndEvent']
     _recording = False
-    __slots__ = ['_gp3', '_rx_buffer']
-    #_hpb=None
+    __slots__ = ['_gp3', '_rx_buffer', '_ttfreq']
 
     def __init__(self, *args, **kwargs):
         EyeTrackerDevice.__init__(self, *args, **kwargs)
@@ -140,38 +158,26 @@ class EyeTracker(EyeTrackerDevice):
 
         # Connect to the eye tracker server by default.
         self.setConnectionState(True)
+        
+        self._gp3get("TIME_TICK_FREQUENCY")
+        self._ttfreq = self._waitForAck('TIME_TICK_FREQUENCY').get("FREQ")
 
     def trackerTime(self):
         """
-        TO DO: Method not implemented in GP3 interface.
-
         Current eye tracker time in the eye tracker's native time base.
-        The TET system uses a usec timebase.
+        The GP3 system uses a sec.usec timebase based on the Windows QPC.
 
         Args:
             None
 
         Returns:
-            float: current native eye tracker time. (in usec for the TET)
+            float: current native eye tracker time in sec.msec format.
         """
-        if self._gp3:
-             # TODO Replace with GP3  and custom code to get current device's
-             # time.
-            return EyeTrackerConstants.EYETRACKER_ERROR  # getTime()
-
-        return EyeTrackerConstants.EYETRACKER_ERROR
+        return getGP3Time()
 
     def trackerSec(self):
         """
-        TO DO: Method not implemented in GP3 interface.
-
-        Current eye tracker time, normalized to sec.msec format.
-
-        Args:
-            None
-
-        Returns:
-            float: current native eye tracker time in sec.msec-usec format.
+        Same as the GP3 implementation of trackerTime().
         """
         if self._gp3:
             return self.trackerTime() * self.DEVICE_TIMEBASE_TO_SEC
@@ -453,6 +459,7 @@ class EyeTracker(EyeTrackerDevice):
                 return
 
             logged_time = Computer.getTime()
+            cpctime = getGP3Time()
 
             # TODO: ??? How to implement trackerSec, using 0.0 constant
             tracker_time = 0.0  # self.trackerSec()
@@ -473,13 +480,14 @@ class EyeTracker(EyeTrackerDevice):
                     # in seconds, take from the REC TIME field
                     event_timestamp = m.get('TIME', ET_UNDEFINED)
 
-                    # TODO event_delay, how to calulate TBD.
-                    event_delay = 0.0  # SHOULD BE something like
-                    # tracker_time - event_timestamp
+                    evt_tick_time = long(m.get('TIME_TICK', ET_UNDEFINED))
+                    evt_tick_sec = evt_tick_time / self._ttfreq
+               
+                    event_delay = cpctime-evt_tick_sec 
+                    #print2err('event_delay: ',event_delay)
 
                     iohub_time = logged_time - event_delay
 
-                    # TODO: Determine how to calc CI for TET Samples
                     confidence_interval = logged_time - self._last_poll_time
 
                     self._last_poll_time = logged_time
