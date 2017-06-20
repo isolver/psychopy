@@ -74,6 +74,46 @@ monitor_devices:
 #            show_validation_accuracy_window: False
 #        model_name: REDm
 
+# GazePoint 3 Config (uncomment below device config to use)
+#
+#eyetracker.hw.gazepoint.gp3.EyeTracker:
+#    # Indicates if the device should actually be loaded at experiment runtime.
+#    enable: True
+#    # The variable name of the device that will be used to access the ioHub Device class
+#    # during experiment run-time, via the devices.[name] attribute of the ioHub
+#    # connection or experiment runtime class.
+#    name: tracker
+#    # Should eye tracker events be saved to the ioHub DataStore file when the device
+#    # is recording data ?
+#    save_events: True
+#    # Should eye tracker events be sent to the Experiment process when the device
+#    # is recording data ?
+#    stream_events: True
+#    # The GP3 EyeTracker class uses the polling method to
+#    # check for new events received from the EyeTracker device. device_timer.interval
+#    # specifies the sec.msec time between device polls. 0.005 = 5 msec, so the device will
+#    # be polled at a maximum rate of 200 Hz. This polling rate is a 'target' value,
+#    # and may not always be achieved depending on your computer specifications and the
+#    # number and type of other devices being used. 
+#    device_timer:
+#        interval: 0.005
+#    # How many eye events (including samples) should be saved in the ioHub event buffer before
+#    # old eye events start being replaced my new events when the event buffer reaches
+#    # the maximum event length of the buffer defined here.
+#    event_buffer_length: 512
+#    # The EyeGaze implementation of the common eye tracker interface supports the
+#    # following event types. If you would like to exclude certain events from being
+#    # saved or streamed during runtime, remove them from the list below.
+#    monitor_event_types: [BinocularEyeSampleEvent,]
+#    calibration:        
+#        # target_duration is the number of sec.msec that a calibration point should
+#        # be displayed before moving onto the next point.
+#        # (Sets the GP3 CALIBRATE_TIMEOUT)
+#        target_duration: 1.25
+#        # target_delay specifies the target animation duration in sec.msec.
+#        # (Sets the GP3 CALIBRATE_DELAY)
+#        target_delay: 0.5
+ 
 # SRR EyeLink Config (uncomment below device config to use)
     - eyetracker.hw.sr_research.eyelink.EyeTracker:
         name: tracker
