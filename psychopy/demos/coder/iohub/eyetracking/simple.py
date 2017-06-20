@@ -3,6 +3,7 @@
 from __future__ import division, print_function, absolute_import
 
 from psychopy import core, visual
+from psychopy.gui.qtgui import infoDlg
 from psychopy.iohub.client import launchHubServer
 
 TRIAL_COUNT = 2
@@ -24,6 +25,7 @@ TRIAL_COUNT = 2
 #
 #                }
 
+# Config the GazePoint 3 tracker for use.
 iohub_config = {'eyetracker.hw.gazepoint.gp3.EyeTracker':
                 {'name': 'tracker', 'device_timer': {'interval': 0.005}}}
                 
@@ -37,6 +39,8 @@ keyboard = io.devices.keyboard
 display = io.devices.display
 tracker = io.devices.tracker
 
+infoDlg("Eye Tracker Setup", "Press OK to start\neye tracker setup / calibration procedure.")
+    
 # run eyetracker calibration
 r = tracker.runSetupProcedure()
 if r:
@@ -111,5 +115,5 @@ while t < TRIAL_COUNT:
 # End experiment
 win.close()
 tracker.setConnectionState(False)
-io.quit()
-core.quit()
+#io.quit()
+#core.quit()
