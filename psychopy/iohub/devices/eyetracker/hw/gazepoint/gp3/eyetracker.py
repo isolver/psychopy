@@ -11,14 +11,16 @@ from ......constants import EventConstants, EyeTrackerConstants
 from ..... import Computer, Device
 from .... import EyeTrackerDevice
 from ....eye_events import *
-from gevent import socket, sleep
+from gevent import socket
 import sys, errno
 
 ET_UNDEFINED = EyeTrackerConstants.UNDEFINED
 getTime = Computer.getTime
 
-#### TEMP >>>>
 if sys.platform == 'win32':
+    # GP3 sends the Windows QPC value for each sample. getGP3Time() returns
+    # the current QPC time. This is used to calculate the sample qpc 'delay'
+    # which is then used to caclulate the sample time in iohub timebase.
     from ctypes import byref, c_int64, windll
     _fcounter_ = c_int64()
     _qpfreq_ = c_int64()
@@ -30,12 +32,9 @@ if sys.platform == 'win32':
         _winQPC_(byref(_fcounter_))
         return _fcounter_.value / _qpfreq_
 else:
+    # GP3 is only supported on Windows, so this will never actually be used.
     def getGP3Time():
-        return getTime()
-        
-_last_evt_tick_sec = 0.0
-##### END TEMP
-        
+        return getTime()        
         
 def to_numeric(lit):
     """Return value of a numeric literal string. If the string can not be
@@ -115,11 +114,6 @@ class EyeTracker(EyeTrackerDevice):
     The Gazepoint GP3 interface uses a polling method to check for new eye
     tracker data. The default polling interval is 5 msec. This can be changed
     in the device's configuration settings for the experiment if needed.
-
-    The following functionality has not yet been implemented in the ioHub GP3
-    interface:
-    * Calculation of the REC event delay in ioHub. Therefore the event time
-      stamps should not be considered msec accurate.
     """
 
     # GP3 tracker times are received as msec
@@ -135,7 +129,7 @@ class EyeTracker(EyeTrackerDevice):
         'BlinkStartEvent',
         'BlinkEndEvent']
     _recording = False
-    __slots__ = ['_gp3', '_rx_buffer', '_ttfreq']
+    __slots__ = ['_gp3', '_rx_buffer', '_ttfreq', '_last_fix_evt']
 
     def __init__(self, *args, **kwargs):
         EyeTrackerDevice.__init__(self, *args, **kwargs)
@@ -162,6 +156,8 @@ class EyeTracker(EyeTrackerDevice):
         self._gp3get("TIME_TICK_FREQUENCY")
         self._ttfreq = self._waitForAck('TIME_TICK_FREQUENCY').get("FREQ")
 
+        self._last_fix_evt = None
+        
     def trackerTime(self):
         """
         Current eye tracker time in the eye tracker's native time base.
@@ -279,19 +275,19 @@ class EyeTracker(EyeTrackerDevice):
                 self._gp3 = socket.socket()
                 address = ('127.0.0.1', 4242)
                 self._gp3.connect(address)
-
-                init_connection_str = '<SET ID="ENABLE_SEND_CURSOR" STATE="1" />\r\n'
+                init_connection_str = ''
+                #init_connection_str = '<SET ID="ENABLE_SEND_CURSOR" STATE="1" />\r\n'
                 init_connection_str += '<SET ID="ENABLE_SEND_POG_LEFT" STATE="1" />\r\n'
                 init_connection_str += '<SET ID="ENABLE_SEND_POG_RIGHT" STATE="1" />\r\n'
-                init_connection_str += '<SET ID="ENABLE_SEND_USER_DATA" STATE="1"/>\r\n'
+                #init_connection_str += '<SET ID="ENABLE_SEND_USER_DATA" STATE="1"/>\r\n'
                 init_connection_str += '<SET ID="ENABLE_SEND_PUPIL_LEFT" STATE="1" />\r\n'
                 init_connection_str += '<SET ID="ENABLE_SEND_PUPIL_RIGHT" STATE="1" />\r\n'
                 init_connection_str += '<SET ID="ENABLE_SEND_POG_FIX" STATE="1" />\r\n'
                 init_connection_str += '<SET ID="ENABLE_SEND_POG_BEST" STATE="1" />\r\n'
-                init_connection_str += '<SET ID="ENABLE_SEND_DATA" STATE="0" />\r\n'
                 init_connection_str += '<SET ID="ENABLE_SEND_COUNTER" STATE="1" />\r\n'
                 init_connection_str += '<SET ID="ENABLE_SEND_TIME" STATE="1" />\r\n'
                 init_connection_str += '<SET ID="ENABLE_SEND_TIME_TICK" STATE="1" />\r\n'
+                init_connection_str += '<SET ID="ENABLE_SEND_DATA" STATE="0" />\r\n'
                 self._gp3.sendall(str.encode(init_connection_str))
                 
                 # block for upp to 1 second to get reply txt.
@@ -401,7 +397,7 @@ class EyeTracker(EyeTrackerDevice):
             self._rx_buffer = ''
             self._gp3.sendall(
                 str.encode('<SET ID="ENABLE_SEND_DATA" STATE="0" />\r\n'))
-            rxdat = self._checkForNetData(1.0)
+            rxdat = self._checkForNetData(1.0)          
             EyeTracker._recording = False
             self._latest_sample = None
             self._latest_gaze_position = None
@@ -459,10 +455,7 @@ class EyeTracker(EyeTrackerDevice):
                 return
 
             logged_time = Computer.getTime()
-            cpctime = getGP3Time()
-
-            # TODO: ??? How to implement trackerSec, using 0.0 constant
-            tracker_time = 0.0  # self.trackerSec()
+            tracker_time = getGP3Time()
 
             # Check for any new rx data from gp3 socket.
             # If None is returned, that means the gp3 closed the socket
@@ -474,123 +467,23 @@ class EyeTracker(EyeTrackerDevice):
             msgs = self._parseRxBuffer()
             for m in msgs:   
                 if m.get('type') == 'REC':
-                    # Always tracks binoc, so always use BINOCULAR_EYE_SAMPLE
-                    event_type = EventConstants.BINOCULAR_EYE_SAMPLE
-
-                    # in seconds, take from the REC TIME field
-                    event_timestamp = m.get('TIME', ET_UNDEFINED)
-
-                    evt_tick_time = long(m.get('TIME_TICK', ET_UNDEFINED))
-                    evt_tick_sec = evt_tick_time / self._ttfreq
-               
-                    event_delay = cpctime-evt_tick_sec 
-                    #print2err('event_delay: ',event_delay)
-
-                    iohub_time = logged_time - event_delay
-
-                    confidence_interval = logged_time - self._last_poll_time
-
-                    self._last_poll_time = logged_time
-
-                    left_gaze_x = m.get('LPOGX', ET_UNDEFINED)
-                    left_gaze_y = m.get('LPOGY', ET_UNDEFINED)
-                    left_gaze_x, left_gaze_y = self._eyeTrackerToDisplayCoords(
-                        (left_gaze_x, left_gaze_y))
-                    left_pupil_size = m.get(
-                        'LPD', ET_UNDEFINED)  # diameter of pupil in pixels
-
-                    right_gaze_x = m.get('RPOGX', ET_UNDEFINED)
-                    right_gaze_y = m.get('RPOGY', ET_UNDEFINED)
-                    right_gaze_x, right_gaze_y = self._eyeTrackerToDisplayCoords(
-                        (right_gaze_x, right_gaze_y))
-                    right_pupil_size = m.get(
-                        'RPD', ET_UNDEFINED)  # diameter of pupil in pixels
+                    binocSample = self._parseSampleFromMsg(m, logged_time, tracker_time)
+                    self._addNativeEventToBuffer(binocSample)
 
                     # left / right eye pos avg. data
                     combined_gaze_x = m.get('FPOGX', ET_UNDEFINED)
                     combined_gaze_y = m.get('FPOGY', ET_UNDEFINED)
                     combined_gaze_x, combined_gaze_y = self._eyeTrackerToDisplayCoords(
                         (combined_gaze_x, combined_gaze_y))
-
-                    #
-                    # The X and Y-coordinates of the left and right eye pupil
-                    # in the camera image, as a fraction of the
-                    # camera image size.
-                    left_raw_x = m.get('LPCX', ET_UNDEFINED)
-                    left_raw_y = m.get('LPCY', ET_UNDEFINED)
-                    right_raw_x = m.get('RPCX', ET_UNDEFINED)
-                    right_raw_y = m.get('RPCY', ET_UNDEFINED)
-
-                    left_eye_status = m.get('LPOGV', ET_UNDEFINED)
-                    right_eye_status = m.get('RPOGV', ET_UNDEFINED)
-
-                    # 0 = both eyes OK
-                    status = 0
-                    if left_eye_status == right_eye_status and right_eye_status == 0:
-                        # both eyes are missing
-                        status = 22
-                    elif left_eye_status == 0:
-                        # Just left eye missing
-                        status = 20
-                    elif right_eye_status == 0:
-                        # Just right eye missing
-                        status = 2
-
-                    binocSample = [
-                        0,  # experiment_id, iohub fills in automatically
-                        0,  # session_id, iohub fills in automatically
-                        0,  # device id, keep at 0
-                        Device._getNextEventID(),  # iohub event unique ID
-                        event_type,  # BINOCULAR_EYE_SAMPLE
-                        event_timestamp,  # eye tracker device time stamp
-                        logged_time,  # time _poll is called
-                        iohub_time,
-                        confidence_interval,
-                        event_delay,
-                        0,
-                        left_gaze_x,
-                        left_gaze_y,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        left_raw_x,
-                        left_raw_y,
-                        left_pupil_size,
-                        EyeTrackerConstants.PUPIL_DIAMETER,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        right_gaze_x,
-                        right_gaze_y,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        right_raw_x,
-                        right_raw_y,
-                        right_pupil_size,
-                        EyeTrackerConstants.PUPIL_DIAMETER,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        ET_UNDEFINED,
-                        status
-                    ]
-
-                    self._addNativeEventToBuffer(
-                        (binocSample, (combined_gaze_x, combined_gaze_y)))
+        
+                    
+                    if combined_gaze_x is not None and combined_gaze_y is not None:
+                        self._latest_gaze_position = (combined_gaze_x, combined_gaze_y)
+                    else:
+                        self._latest_gaze_position = None
+            
+                    for fix_evt in self._parseFixationFromMsg(m, logged_time, tracker_time):
+                        self._addNativeEventToBuffer(fix_evt)
 
                 elif m.get('type') == 'ACK':
                     pass #print2err('ACK Received: ', m)
@@ -604,17 +497,298 @@ class EyeTracker(EyeTrackerDevice):
         finally:
             return 0
 
+    def _parseFixationFromMsg(self, m, logged_time, tracker_time):
+        fix_evts = []
+        fix_valid = m.get('FPOGV', ET_UNDEFINED)
+        if fix_valid == 1:
+            fix_x , fix_y = self._eyeTrackerToDisplayCoords((m.get('FPOGX',
+                                                                   ET_UNDEFINED),
+                                                             m.get('FPOGY', 
+                                                                   ET_UNDEFINED)
+                                                            )
+                                                           )
+            fix_stime = m.get('FPOGS', ET_UNDEFINED)
+            fix_duration = m.get('FPOGD', ET_UNDEFINED)
+            fix_id = m.get('FPOGID', ET_UNDEFINED)        
+            m = dict(FPOGID=fix_id, FPOGV=fix_valid, FPOGX=fix_x, FPOGY=fix_y, 
+                     FPOGS=fix_stime, FPOGD=fix_duration)    
+
+            if self._last_fix_evt is None:
+                # Create start fixation evt based on m
+                fix_evts = self._createStartFixEvt(m, logged_time, tracker_time)            
+            elif fix_id != self._last_fix_evt.get('FPOGID'):
+                # Create Fixation end evt based on self._last_fix_evt
+                fix_evts = self._createEndFixEvt(self._last_fix_evt, logged_time, tracker_time)
+                # Create start fixation evt based on m
+                fstart = self._createStartFixEvt(m, logged_time, tracker_time)
+                fix_evts.extend(fstart)
+                
+            self._last_fix_evt = m
+            
+        return fix_evts
+        
+    def _createStartFixEvt(self, m, logged_time, tracker_time):
+        # Create start fixation evt based on m
+        # GP3 does not craete seperate left and right eye fix evts, so we
+        # create a left and right fix evt each time.
+        
+        print2err(">> TODO: Finish Create FIX_START: ")     
+        
+        gaze = m.get('FPOGX', ET_UNDEFINED), m.get('FPOGY', ET_UNDEFINED)
+        
+        fix_stime = m.get('FPOGS', ET_UNDEFINED)
+        etype = EventConstants.FIXATION_START
+        estatus = 0
+        
+        confidenceInterval = 0 #TODO
+        event_delay = 0 #TODO
+        iohub_time = logged_time # TODO
+        
+        sel = [
+            0,                                      # exp ID
+            0,                                      # sess ID
+            0,  # device id (not currently used)
+            Device._getNextEventID(),              # event ID
+            etype,                                  # event type
+            fix_stime,
+            logged_time,
+            iohub_time,
+            confidenceInterval,
+            event_delay,
+            0,
+            EyeTrackerConstants.LEFT_EYE,                              # eye
+            gaze[0],                                # gaze x
+            gaze[1],                                # gaze y
+            ET_UNDEFINED,                                     # gaze z
+            ET_UNDEFINED,                                # angle x
+            ET_UNDEFINED,                                # angle y
+            ET_UNDEFINED,                                   # raw x
+            ET_UNDEFINED,                                   # raw y
+            ET_UNDEFINED,                    # pupil measure 1
+            ET_UNDEFINED,                    # pupil measure type 1
+            ET_UNDEFINED,                    # pupil measure 2
+            ET_UNDEFINED,                    # pupil measure 2 type
+            ET_UNDEFINED,                                 # ppd x
+            ET_UNDEFINED,                                 # ppd y
+            ET_UNDEFINED,                                    # velocity x
+            ET_UNDEFINED,                                    # velocity y
+            ET_UNDEFINED,                                # velocity xy
+            estatus                                  # status
+        ]
+        
+        ser = list(sel)
+        ser[3]=Device._getNextEventID()
+        ser[11]=EyeTrackerConstants.RIGHT_EYE
+        
+        
+        
+
+        return [sel, ser]
+    
+    def _createEndFixEvt(self, m, logged_time, tracker_time):
+        # Create end fixation evt based on m
+
+        print2err("<< TODO: Finish Create FIX_END: ")
+        etype = EventConstants.FIXATION_END
+        estatus = 0
+        
+        gaze = m.get('FPOGX', ET_UNDEFINED), m.get('FPOGY', ET_UNDEFINED)
+        fix_stime = m.get('FPOGS', ET_UNDEFINED)
+        fix_dur = m.get('FPOSD', ET_UNDEFINED)
+        fix_etime = fix_stime + fix_dur 
+
+        confidence_interval = 0 #TODO right
+        event_delay = 0 #TODO right
+        iohub_time = logged_time + fix_dur# TODO right
+
+        eel = [0,
+               0,
+               0,  # device id (not currently used)
+               Device._getNextEventID(),
+               etype,
+               fix_etime,
+               logged_time,
+               iohub_time,
+               confidence_interval,
+               event_delay,
+               0,
+               EyeTrackerConstants.LEFT_EYE,
+               fix_dur,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               gaze[0],
+               gaze[1],
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               ET_UNDEFINED,
+               estatus
+               ]
+
+        eer = list(eel)
+        eer[3]=Device._getNextEventID()
+        eer[11]=EyeTrackerConstants.RIGHT_EYE
+     
+        return [eel, eer]
+        
+    def _parseSampleFromMsg(self, m, logged_time, tracker_time):
+        # Always tracks binoc, so always use BINOCULAR_EYE_SAMPLE
+        event_type = EventConstants.BINOCULAR_EYE_SAMPLE
+
+        # in seconds, take from the REC TIME field
+        event_timestamp = m.get('TIME', ET_UNDEFINED)
+
+        evt_tick_time = long(m.get('TIME_TICK', ET_UNDEFINED))
+        evt_tick_sec = evt_tick_time / self._ttfreq
+   
+        event_delay = tracker_time-evt_tick_sec 
+        #print2err('event_delay: ',event_delay)
+
+        iohub_time = logged_time - event_delay
+
+        confidence_interval = logged_time - self._last_poll_time
+
+        self._last_poll_time = logged_time
+
+        left_gaze_x = m.get('LPOGX', ET_UNDEFINED)
+        left_gaze_y = m.get('LPOGY', ET_UNDEFINED)
+        left_gaze_x, left_gaze_y = self._eyeTrackerToDisplayCoords(
+            (left_gaze_x, left_gaze_y))
+        left_pupil_size = m.get(
+            'LPD', ET_UNDEFINED)  # diameter of pupil in pixels
+
+        right_gaze_x = m.get('RPOGX', ET_UNDEFINED)
+        right_gaze_y = m.get('RPOGY', ET_UNDEFINED)
+        right_gaze_x, right_gaze_y = self._eyeTrackerToDisplayCoords(
+            (right_gaze_x, right_gaze_y))
+        right_pupil_size = m.get(
+            'RPD', ET_UNDEFINED)  # diameter of pupil in pixels
+
+        #
+        # The X and Y-coordinates of the left and right eye pupil
+        # in the camera image, as a fraction of the
+        # camera image size.
+        left_raw_x = m.get('LPCX', ET_UNDEFINED)
+        left_raw_y = m.get('LPCY', ET_UNDEFINED)
+        right_raw_x = m.get('RPCX', ET_UNDEFINED)
+        right_raw_y = m.get('RPCY', ET_UNDEFINED)
+
+        left_eye_status = m.get('LPOGV', ET_UNDEFINED)
+        right_eye_status = m.get('RPOGV', ET_UNDEFINED)
+
+        # 0 = both eyes OK
+        status = 0
+        if left_eye_status == right_eye_status and right_eye_status == 0:
+            # both eyes are missing
+            status = 22
+        elif left_eye_status == 0:
+            # Just left eye missing
+            status = 20
+        elif right_eye_status == 0:
+            # Just right eye missing
+            status = 2
+
+        return [
+            0,  # experiment_id, iohub fills in automatically
+            0,  # session_id, iohub fills in automatically
+            0,  # device id, keep at 0
+            Device._getNextEventID(),  # iohub event unique ID
+            event_type,  # BINOCULAR_EYE_SAMPLE
+            event_timestamp,  # eye tracker device time stamp
+            logged_time,  # time _poll is called
+            iohub_time,
+            confidence_interval,
+            event_delay,
+            0,
+            left_gaze_x,
+            left_gaze_y,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            left_raw_x,
+            left_raw_y,
+            left_pupil_size,
+            EyeTrackerConstants.PUPIL_DIAMETER,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            right_gaze_x,
+            right_gaze_y,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            right_raw_x,
+            right_raw_y,
+            right_pupil_size,
+            EyeTrackerConstants.PUPIL_DIAMETER,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            ET_UNDEFINED,
+            status
+        ]        
+
     def _getIOHubEventObject(self, native_event_data):
         """The _getIOHubEventObject method is called by the ioHub Process to
         convert new native device event objects that have been received to the
         appropriate ioHub Event type representation."""
-        self._latest_sample, cgp = native_event_data
-
-        if cgp[0] is not None and cgp[1] is not None:
-            self._latest_gaze_position = cgp
-        else:
-            self._latest_gaze_position = None
-
+        self._latest_sample = native_event_data
         return self._latest_sample
 
     def _eyeTrackerToDisplayCoords(self, eyetracker_point):
