@@ -110,6 +110,8 @@ class EyeTracker(EyeTrackerDevice):
         * combined_gaze_Y: uses FPOGY
         * left_pupil_size: uses LPD and is diameter in pixels
         * right_pupil_size: uses RPD and is diamter in pixels
+    * Creates FixationStart and FixationEnd events by parsing the FPOGx fields 
+      of REC messages from the GP3.
 
     The Gazepoint GP3 interface uses a polling method to check for new eye
     tracker data. The default polling interval is 5 msec. This can be changed
@@ -491,6 +493,8 @@ class EyeTracker(EyeTrackerDevice):
                     # Message type is not being handled.
                     print2err('UNHANDLED GP3 MESSAGE: ', m)
 
+            self._last_poll_time = logged_time
+
         except Exception:
             print2err('ERROR occurred during GP3 Sample Callback.')
             printExceptionDetailsToStdErr()
@@ -511,7 +515,9 @@ class EyeTracker(EyeTrackerDevice):
             fix_duration = m.get('FPOGD', ET_UNDEFINED)
             fix_id = m.get('FPOGID', ET_UNDEFINED)        
             m = dict(FPOGID=fix_id, FPOGV=fix_valid, FPOGX=fix_x, FPOGY=fix_y, 
-                     FPOGS=fix_stime, FPOGD=fix_duration)    
+                     FPOGS=fix_stime, FPOGD=fix_duration, 
+                     TIME=long(m.get('TIME')),
+                     TIME_TICK=long(m.get('TIME_TICK')))
 
             if self._last_fix_evt is None:
                 # Create start fixation evt based on m
@@ -531,18 +537,18 @@ class EyeTracker(EyeTrackerDevice):
         # Create start fixation evt based on m
         # GP3 does not craete seperate left and right eye fix evts, so we
         # create a left and right fix evt each time.
-        
-        print2err(">> TODO: Finish Create FIX_START: ")     
-        
         gaze = m.get('FPOGX', ET_UNDEFINED), m.get('FPOGY', ET_UNDEFINED)
-        
-        fix_stime = m.get('FPOGS', ET_UNDEFINED)
+
+        evt_tick_time = long(m.get('TIME_TICK', ET_UNDEFINED))
+        evt_tick_sec = evt_tick_time / self._ttfreq
+   
+        sample_delay = tracker_time-evt_tick_sec 
+        fix_dur = m.get('FPOGD', ET_UNDEFINED)
+        iohub_time = logged_time - sample_delay - fix_dur
+        confidence_interval = logged_time - self._last_poll_time
+        device_time = m.get('FPOGS', ET_UNDEFINED)
         etype = EventConstants.FIXATION_START
         estatus = 0
-        
-        confidenceInterval = 0 #TODO
-        event_delay = 0 #TODO
-        iohub_time = logged_time # TODO
         
         sel = [
             0,                                      # exp ID
@@ -550,11 +556,11 @@ class EyeTracker(EyeTrackerDevice):
             0,  # device id (not currently used)
             Device._getNextEventID(),              # event ID
             etype,                                  # event type
-            fix_stime,
+            device_time,
             logged_time,
             iohub_time,
-            confidenceInterval,
-            event_delay,
+            confidence_interval,
+            sample_delay,
             0,
             EyeTrackerConstants.LEFT_EYE,                              # eye
             gaze[0],                                # gaze x
@@ -580,37 +586,39 @@ class EyeTracker(EyeTrackerDevice):
         ser[3]=Device._getNextEventID()
         ser[11]=EyeTrackerConstants.RIGHT_EYE
         
-        
-        
-
         return [sel, ser]
     
     def _createEndFixEvt(self, m, logged_time, tracker_time):
         # Create end fixation evt based on m
-
-        print2err("<< TODO: Finish Create FIX_END: ")
         etype = EventConstants.FIXATION_END
         estatus = 0
         
         gaze = m.get('FPOGX', ET_UNDEFINED), m.get('FPOGY', ET_UNDEFINED)
-        fix_stime = m.get('FPOGS', ET_UNDEFINED)
-        fix_dur = m.get('FPOSD', ET_UNDEFINED)
-        fix_etime = fix_stime + fix_dur 
 
-        confidence_interval = 0 #TODO right
-        event_delay = 0 #TODO right
-        iohub_time = logged_time + fix_dur# TODO right
+
+        evt_tick_time = long(m.get('TIME_TICK', ET_UNDEFINED))
+        evt_tick_sec = evt_tick_time / self._ttfreq
+   
+        sample_delay = tracker_time-evt_tick_sec 
+        fix_dur = m.get('FPOGD', ET_UNDEFINED)
+        iohub_time = logged_time - sample_delay
+        confidence_interval = logged_time - self._last_poll_time
+        device_time = m.get('FPOGS', ET_UNDEFINED)+fix_dur
+
+        confidence_interval = logged_time - self._last_poll_time
+
+        iohub_time = logged_time - sample_delay
 
         eel = [0,
                0,
                0,  # device id (not currently used)
                Device._getNextEventID(),
                etype,
-               fix_etime,
+               device_time,
                logged_time,
                iohub_time,
                confidence_interval,
-               event_delay,
+               sample_delay,
                0,
                EyeTrackerConstants.LEFT_EYE,
                fix_dur,
@@ -690,8 +698,6 @@ class EyeTracker(EyeTrackerDevice):
         iohub_time = logged_time - event_delay
 
         confidence_interval = logged_time - self._last_poll_time
-
-        self._last_poll_time = logged_time
 
         left_gaze_x = m.get('LPOGX', ET_UNDEFINED)
         left_gaze_y = m.get('LPOGY', ET_UNDEFINED)
