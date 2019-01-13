@@ -943,7 +943,11 @@ class KeyboardConstants(Constants):
             if vcode_name.startswith('VK_NUMPAD'):
                 return 'num_%s' % (vcode_name[9:].lower())
             return vcode_name[3:].lower()
-        else:
+        elif keyEvent.Key is None:
+            print2err("KeyBoardConstants Error: keyEvent.Key is None.")
+            print2err("\t* keyEvent: {}".format(keyEvent))
+            print2err("")
+        else:        
             phkey = keyEvent.Key.lower()
             if phkey.startswith('numpad'):
                 phkey = 'num_%s' % (phkey.Key[6:])
