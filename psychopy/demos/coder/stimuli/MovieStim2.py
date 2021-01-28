@@ -2,19 +2,10 @@
 # -*- coding: utf-8 -*-
 
 """
-Demo using the new (beta) MovieStim2 to play a video file. Path of video
-needs to updated to point to a video you have. MovieStim2 does /not/ require
-avbin to be installed.
-
-Movie2 does require:
-1. Python OpenCV package (so openCV libs and the cv2 python interface).
-    * For Windows, a binary installer is available at
-        http: //www.lfd.uci.edu/~gohlke/pythonlibs/  # opencv
-    * For Linux, it is available via whatever package manager you use.
-    * For OSX, ..... ?
-2. VLC application. The architeceture of this needs to match your psychopy/python installation 64/32 bit
-    whether or not your *operating system* is 64/32 bit
-    http: //www.videolan.org/vlc/index.html
+Demo using the MovieStim2 to play a video file or display webcam. 
+To play a file, videopath must be set to a valid video file path.
+To play the webcam, videopath must be an integer, usually 0 is what you
+want.
 """
 
 from __future__ import division
@@ -23,9 +14,13 @@ from psychopy import visual, core, event, constants
 import time, os
 
 videopath = r'./jwpIntro.mov'
-videopath = os.path.join(os.getcwd(), videopath)
-if not os.path.exists(videopath):
-    raise RuntimeError("Video File could not be found:" + videopath)
+# Set video path to 0 to have MovieStim use webcamera video stream.
+videopath = 0
+
+if type(videopath) != int:
+    videopath = os.path.join(os.getcwd(), videopath)
+    if not os.path.exists(videopath):
+        raise RuntimeError("Video File could not be found:" + videopath)
 
 win = visual.Window([1024, 768])
 
@@ -38,12 +33,13 @@ mov = visual.MovieStim2(win, videopath,
     loop=False)
 
 keystext = "PRESS 'q' or 'escape' to Quit.\n"
-keystext += "  #     's': Stop/restart Movie.\n"
-keystext += "  #     'p': Pause/Unpause Movie.\n"
-keystext += "  #     '>': Seek Forward 1 Second.\n"
-keystext += "  #     '<': Seek Backward 1 Second.\n"
-keystext += "  #     '-': Decrease Movie Volume.\n"
-keystext += "  #     '+': Increase Movie Volume."
+keystext += "  #     'p': Pause/Unpause Video.\n"
+if not mov.isStreamingCamera():
+    keystext += "  #     's': Stop/restart Video.\n"
+    keystext += "  #     '>': Seek Forward 1 Second.\n"
+    keystext += "  #     '<': Seek Backward 1 Second.\n"
+    keystext += "  #     '-': Decrease Movie Volume.\n"
+    keystext += "  #     '+': Increase Movie Volume."
 text = visual.TextStim(win, keystext, pos=(0, -250), units = 'pix')
 
 # Start the movie stim by preparing it to play
@@ -68,12 +64,10 @@ while mov.status != constants.FINISHED:
         if key in ['escape', 'q']:
             win.close()
             core.quit()
-        elif key in ['s', ]:
+        elif key in ['s', ] and not mov.isStreamingCamera():
             if mov.status in [constants.PLAYING, constants.PAUSED]:
                 # To stop the movie being played.....
                 mov.stop()
-                # Clear screen of last displayed frame.
-                win.flip()
                 # When movie stops, clear screen of last displayed frame,
                 # and display text stim only....
                 text.draw()
@@ -81,7 +75,7 @@ while mov.status != constants.FINISHED:
             else:
                 # To replay a movie that was stopped.....
                 mov.loadMovie(videopath)
-                shouldflip = mov.play()
+                mov.play()
         elif key in ['p', ]:
             # To pause the movie while it is playing....
             if mov.status == constants.PLAYING:
@@ -89,8 +83,7 @@ while mov.status != constants.FINISHED:
             elif mov.status == constants.PAUSED:
                 # To /unpause/ the movie if pause has been called....
                 mov.play()
-                text.draw()
-                win.flip()
+                shouldFlip=True
         elif key == 'period':
             # To skip ahead 1 second in movie.
             ntime = min(mov.getCurrentFrameTime() + 1.0, mov.duration)

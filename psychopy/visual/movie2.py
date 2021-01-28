@@ -2,21 +2,8 @@
 # -*- coding: utf-8 -*-
 
 """
-A stimulus class for playing movies (mpeg, avi, etc...) in PsychoPy.
-Demo using the experimental movie2 stim to play a video file. Path of video
-needs to updated to point to a video you have. movie2 does /not/ require
-avbin to be installed.
-
-Movie2 does require:
-~~~~~~~~~~~~~~~~~~~~~
-
-1. Python OpenCV package (so openCV libs and the cv2 python interface).
-    *. For Windows, a binary installer is available at
-        http://www.lfd.uci.edu/~gohlke/pythonlibs/#opencv
-    *. For Linux, it is available via whatever package manager you use.
-    *. For OSX, ..... ?
-2. VLC application. Just install the standard VLC (32bit) for your OS.
-    http://www.videolan.org/vlc/index.html
+A stimulus class for playing movies (mpeg, avi, etc...) or webcam display 
+in PsychoPy. 
 
 To play a video, you /must/:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -30,18 +17,12 @@ d. In the experiment loop, call mov.draw() followed by win.flip() to draw
    frame is drawn, mov.draw() will return the frame index just drawn. If
    the same frame is drawn as before, None is returned.
 
-This method call sequence must be followed. This should be improved (I think)
-depending on how movie stim calls are actually made. The current movie stim
-code doc's seem a bit mixed in message.
-
 Current known issues:
 ~~~~~~~~~~~~~~~~~~~~~~
 
 1. Loop functionality are known to be broken at this time.
 2. Auto draw not implemented.
 3. Video must have 3 color channels.
-4. Intentional Frame dropping (to keep video playing at expected rate
-    on slow machines) is not yet implemented.
 
 What does work so far:
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -206,7 +187,7 @@ class MovieStim2(BaseVisualStim, ContainerMixin):
         :Parameters:
 
             filename :
-                a string giving the relative or absolute path to the movie.
+                To play a file provide a string giving the movie path. To use the default webcam, specify 0.
             flipVert : True or *False*
                 If True then the movie will be top-bottom flipped
             flipHoriz : True or *False*
@@ -236,7 +217,12 @@ class MovieStim2(BaseVisualStim, ContainerMixin):
             logging.warning("FrameRate could not be supplied by psychopy; "
                             "defaulting to 60.0")
             self._retracerate = 60.0
-        self.filename = pathToString(filename)
+        
+        
+        self.filename = filename
+        
+        self._usingWebCam = isinstance(filename, int)
+        
         self.loop = loop
         self.flipVert = flipVert
         self.flipHoriz = flipHoriz
@@ -245,7 +231,7 @@ class MovieStim2(BaseVisualStim, ContainerMixin):
         self.opacity = float(opacity)
         self.volume = volume
         self._av_stream_time_offset = 0.145
-        self._no_audio = noAudio
+        self._no_audio = self._usingWebCam or noAudio
         self._vframe_callback = vframe_callback
         self.interpolate = interpolate
 
@@ -294,8 +280,8 @@ class MovieStim2(BaseVisualStim, ContainerMixin):
         self._inter_frame_interval = None
         self._prev_frame_sec = None
         self._next_frame_sec = None
-        self._next_frame_index = None
-        self._prev_frame_index = None
+        self._next_frame_index = 0
+        self._prev_frame_index = 0
         self._video_perc_done = None
         # self._last_video_flip_time = None
         self._next_frame_displayed = False
@@ -308,6 +294,9 @@ class MovieStim2(BaseVisualStim, ContainerMixin):
         self._audio_stream_started = False
         self._audio_stream_event_manager = None
 
+    def isStreamingCamera(self):
+        return self._usingWebCam
+    
     def setMovie(self, filename, log=True):
         """See `~MovieStim.loadMovie` (the functions are identical).
 
@@ -328,7 +317,12 @@ class MovieStim2(BaseVisualStim, ContainerMixin):
         After the file is loaded MovieStim.duration is updated with the movie
         duration (in seconds).
         """
-        filename = pathToString(filename)
+        if isinstance(filename, str):
+            filename = pathToString(filename)
+        elif isinstance(filename, int):
+            filename = filename        
+        self._usingWebCam = isinstance(filename, int)
+
         self._unload()
         self._reset()
         if self._no_audio is False:
@@ -490,6 +484,10 @@ class MovieStim2(BaseVisualStim, ContainerMixin):
     def seek(self, timestamp, log=True):
         """Seek to a particular timestamp in the movie.
         """
+        if self.isStreamingCamera():
+            if log:
+                logAttrib(self, log, 'camera stream not seekable')
+            return
         if self.status in [PLAYING, PAUSED]:
             if timestamp > 0.0:
                 if self.status == PLAYING:
@@ -534,6 +532,8 @@ class MovieStim2(BaseVisualStim, ContainerMixin):
         between 0.0 and 1.0 are also accepted, and scaled to an int
         between 0 and 100.
         """
+        if self.isStreamingCamera():
+            return
         if self._audio_stream_player:
             if 0.0 <= v <= 1.0 and isinstance(v, float):
                 v = int(v * 100)
@@ -573,6 +573,8 @@ class MovieStim2(BaseVisualStim, ContainerMixin):
         """True if the next movie frame should be drawn,
         False if it is not yet time. See getTimeToNextFrameDraw().
         """
+        if self._usingWebCam:
+            return True
         return self.getTimeToNextFrameDraw() <= 0.0
 
     def getCurrentFrameNumber(self):
@@ -610,15 +612,17 @@ class MovieStim2(BaseVisualStim, ContainerMixin):
             if self._video_stream.grab():
                 self._prev_frame_index = self._next_frame_index
                 self._prev_frame_sec = self._next_frame_sec
-                self._next_frame_index = self._video_stream.get(
-                    cv2.CAP_PROP_POS_FRAMES)
+                if self._usingWebCam:
+                    self._next_frame_index+=1
+                else:
+                    self._next_frame_index = self._video_stream.get(cv2.CAP_PROP_POS_FRAMES)
                 self._next_frame_sec = self._video_stream.get(
                     cv2.CAP_PROP_POS_MSEC)/1000.0
                 self._video_perc_done = self._video_stream.get(
                     cv2.CAP_PROP_POS_AVI_RATIO)
                 self._next_frame_displayed = False
                 halfInterval = self._inter_frame_interval/2.0
-                if self.getTimeToNextFrameDraw() > -halfInterval:
+                if self._usingWebCam or self.getTimeToNextFrameDraw() > -halfInterval:
                     return self._next_frame_sec
                 else:
                     self.nDroppedFrames += 1
@@ -725,7 +729,7 @@ class MovieStim2(BaseVisualStim, ContainerMixin):
             self._startAudio()
 
         if self._next_frame_displayed:
-            if self._getVideoAudioTimeDiff() > self._inter_frame_interval:
+            if self._usingWebCam is False and self._getVideoAudioTimeDiff() > self._inter_frame_interval:
                 vtClock.reset(-self._next_frame_sec)
             else:
                 self._getNextFrame()
